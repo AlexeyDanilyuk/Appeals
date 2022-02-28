@@ -6,18 +6,14 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-from mail_send import send_mail
+from src.mail_send import send_mail
 
 judicial_precinct = {
-    '44': ['user', 'password', 'sud44.khv@mail.ru'],
-    '45': ['user', 'password', 'sud45.khv@mail.ru'],
-    '46': ['user', 'password', 'sud46.khv@mail.ru'],
-    '74': ['user', 'password', 'sud74.khv@mail.ru']
+    '44': ['username', 'password', 'mail address'],
 }
-# dir_path = 'D:\\www\\Python\\Appeals'
-
 
 dir_path = 'L:\\Общая\\Обращения'
+chrome_path_driver = os.path.join(os.getcwd(), 'chromedriver.exe')
 
 
 def run_appeals_dict(numappeals, numuch, userid, passwd):
@@ -33,7 +29,7 @@ def run_appeals_dict(numappeals, numuch, userid, passwd):
     file_opt.add_argument('--headless')
     file_opt.add_argument('--verbose')
     file_opt.add_argument('--disable-software-rasterizer')
-    browser = webdriver.Chrome(options=file_opt)
+    browser = webdriver.Chrome(executable_path=chrome_path_driver, options=file_opt)
     browser.get(numappeals[1])
 
     browser.find_element(By.ID, 'aid').send_keys(userid)
@@ -44,11 +40,12 @@ def run_appeals_dict(numappeals, numuch, userid, passwd):
     len_url_file = len(browser.find_elements(By.XPATH, '//a[@title="скачать файл"]'))
     for url_file in range(len_url_file):
         browser.find_elements(By.XPATH, '//a[@title="скачать файл"]')[url_file].click()
-        time.sleep(30)
+        time.sleep(60)
     browser.find_element(By.XPATH, '//input[@class="but"]').click()
 
 
 def loop_jp(data_jp):
+    global browser
     userid = data_jp[1][0]
     passwd = data_jp[1][1]
     numuch = data_jp[0]
@@ -61,7 +58,7 @@ def loop_jp(data_jp):
         opt.add_argument('--verbose')
         opt.add_argument('--disable-software-rasterizer')
 
-        browser = webdriver.Chrome(options=opt)
+        browser = webdriver.Chrome(executable_path=chrome_path_driver, options=opt)
         browser.implicitly_wait(5)
         browser.get(link)
 
@@ -69,7 +66,7 @@ def loop_jp(data_jp):
         browser.find_element(By.ID, 'pwd').send_keys(passwd)
         browser.find_element(By.CLASS_NAME, 'but').click()
 
-        browser.find_element(By.XPATH, '//a[text()="Обращения граждан"]').click()
+        browser.get(f'{link}?op=gbook_list_na')
         row = len(browser.find_elements(By.XPATH, '//table[@class="admList"]/tbody/tr/td[3]/nobr'))
         appeals_dict = {}
 
@@ -79,24 +76,21 @@ def loop_jp(data_jp):
                     By.XPATH, '//tr[' + str(s + 1) + ']/td[2]/nobr').text] = browser.find_element(
                     By.XPATH, '//tr[' + str(s + 1) + ']/td[4]/a').get_attribute('href')
         if appeals_dict:
-            appeals_lst_proc = [multiprocessing.Process(target=run_appeals_dict,
-                                                        args=(numappeals, numuch, userid, passwd,))
-                                for numappeals in appeals_dict.items()]
-            len_appeals_dict = len(appeals_dict)
-            if str(len_appeals_dict).endswith('1') and len_appeals_dict != 11:
+            [multiprocessing.Process(target=run_appeals_dict,
+                                     args=(numappeals, numuch, userid, passwd,)).start()
+             for numappeals in appeals_dict.items()]
+            if str(len(appeals_dict)).endswith('1') and len(appeals_dict) != 11:
                 end_str = 'е'
-            elif len_appeals_dict % 10 in (2, 3, 4) and len_appeals_dict not in (12, 13, 14):
+            elif len(appeals_dict) % 10 in (2, 3, 4) and len(appeals_dict) not in (12, 13, 14):
                 end_str = 'я'
             else:
                 end_str = 'й'
             appeals_str = f'обращени{end_str}'
-            print(f'По участку {numuch} найдено {len_appeals_dict} {appeals_str}!')
-            email_body = f'В систему обращений судебного участка №{numuch} поступило {len_appeals_dict} ' \
+            print(f'По участку {numuch} найдено {len(appeals_dict)} {appeals_str}!')
+            email_body = f'В систему обращений судебного участка №{numuch} поступило {len(appeals_dict)} ' \
                          f'{appeals_str}.\nКаталог с обращениями находится по адресу ' \
                          f'{os.path.join(dir_path, numuch)}'
             send_mail(email_uch, 'Оповещение об обращениях', email_body)
-            for appeals in appeals_lst_proc:
-                appeals.start()
         else:
             print(f'По участку {numuch} нет новых обращений!')
 
@@ -106,6 +100,4 @@ def loop_jp(data_jp):
 
 
 if __name__ == '__main__':
-    PROC = [multiprocessing.Process(target=loop_jp, args=(jp,)) for jp in judicial_precinct.items()]
-    for prc in PROC:
-        prc.start()
+    PROC = [multiprocessing.Process(target=loop_jp, args=(jp,)).start() for jp in judicial_precinct.items()]
