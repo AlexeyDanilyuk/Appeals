@@ -6,18 +6,22 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
+from src.write_log import write_log
 from src.mail_send import send_mail
 
 judicial_precinct = {
-    '44': ['username', 'password', 'mail address'],
+    '44': ['username', 'password', 'email'],
+    '45': ['username', 'password', 'email'],
+    '74': ['username', 'password', 'email']
 }
 
-dir_path = 'L:\\Общая\\Обращения'
-chrome_path_driver = os.path.join(os.getcwd(), 'chromedriver.exe')
+dir_path = 'Путь к каталогу для загрузки обращений'
+chrome_path_driver = 'Путь к драйверу chromedriver.exe'
 
 
 def run_appeals_dict(numappeals, numuch, userid, passwd):
     download_path = os.path.join(dir_path, numuch, numappeals[0])
+    print(download_path)
     os.makedirs(download_path, exist_ok=True)
     file_opt = webdriver.ChromeOptions()
     prefs = {
@@ -30,9 +34,9 @@ def run_appeals_dict(numappeals, numuch, userid, passwd):
     file_opt.add_argument('--verbose')
     file_opt.add_argument('--disable-software-rasterizer')
     browser = webdriver.Chrome(executable_path=chrome_path_driver, options=file_opt)
-    browser.get(numappeals[1])
+    browser.cmd.get(numappeals[1])
 
-    browser.find_element(By.ID, 'aid').send_keys(userid)
+    browser.cmd.find_element(By.ID, 'aid').send_keys(userid)
     browser.find_element(By.ID, 'pwd').send_keys(passwd)
     browser.find_element(By.CLASS_NAME, 'but').click()
 
@@ -45,20 +49,19 @@ def run_appeals_dict(numappeals, numuch, userid, passwd):
 
 
 def loop_jp(data_jp):
-    global browser
     userid = data_jp[1][0]
     passwd = data_jp[1][1]
     numuch = data_jp[0]
     email_uch = data_jp[1][2]
 
     link = f'http://{numuch}.hbr.msudrf.ru/admin.php'
-    try:
-        opt = Options()
-        opt.add_argument('--headless')
-        opt.add_argument('--verbose')
-        opt.add_argument('--disable-software-rasterizer')
+    opt = Options()
+    opt.add_argument('--headless')
+    opt.add_argument('--verbose')
+    opt.add_argument('--disable-software-rasterizer')
 
-        browser = webdriver.Chrome(executable_path=chrome_path_driver, options=opt)
+    browser = webdriver.Chrome(executable_path=chrome_path_driver, options=opt)
+    try:
         browser.implicitly_wait(5)
         browser.get(link)
 
@@ -86,15 +89,16 @@ def loop_jp(data_jp):
             else:
                 end_str = 'й'
             appeals_str = f'обращени{end_str}'
-            print(f'По участку {numuch} найдено {len(appeals_dict)} {appeals_str}!')
+            write_log(f'По участку {numuch} найдено {len(appeals_dict)} {appeals_str}!', 'info')
             email_body = f'В систему обращений судебного участка №{numuch} поступило {len(appeals_dict)} ' \
                          f'{appeals_str}.\nКаталог с обращениями находится по адресу ' \
                          f'{os.path.join(dir_path, numuch)}'
             send_mail(email_uch, 'Оповещение об обращениях', email_body)
         else:
-            print(f'По участку {numuch} нет новых обращений!')
+            write_log(f'По участку {numuch} нет новых обращений!', 'info')
 
     finally:
+        write_log(f'Обработка обращений по участку {numuch} завершена!', 'info')
         browser.implicitly_wait(60)
         browser.quit()
 
